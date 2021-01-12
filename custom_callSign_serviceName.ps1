@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20201106.1-alpha
+# Version: 20210111.1-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -124,7 +124,7 @@ function Customize-Configuration {
 		# Get EPG channel lineup station ID, and perform Set/Remove/Replace
 		if ( $epg123_mxf -match `
 			"<Channel uid=`"!Channel!$ChLineUp!(?<station_id>[0-9]*)_"+$ChNumber[0]+"_"+$ChNumber[1]+"`" lineup=`"(?<lineup_id>l[0-9]*)`" " + `
-			"service=`"(?<service_id>.*?)`" number=`""+$ChNumber[0]+"`" subNumber=`""+$ChNumber[1]+"`" />" ) {
+			"service=`"(?<service_id>.*?)`" matchName=`"(?<matchName>.*?)`" number=`""+$ChNumber[0]+"`" subNumber=`""+$ChNumber[1]+"`" />" ) {
 
 			$station_id = $matches['station_id'];	$RegexEscaped_station_id = [Regex]::Escape($station_id)
 			$lineup_id = $matches['lineup_id'];		$RegexEscaped_lineup_id = [Regex]::Escape($lineup_id)
@@ -199,6 +199,7 @@ function Invoke-Device_Channel_Detection_Scan_Web {
 
 	$json = $webclient.DownloadString($lineup_json_url)
 
+		'479000000' = '15'
 	# Final status
 	$found = ($json | ConvertFrom-Json).length; $progress = 100
 	$status = ' Found '+$found+' programs ('+$progress+'%)       '
@@ -358,6 +359,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20210111.1-alpha
+# Accommodate the "matchName" field in "epg123.mxf"
 
 # Version: 20201106.1-alpha
 # Learned to select channel detection scan method (web/client/none) from variable setting.
