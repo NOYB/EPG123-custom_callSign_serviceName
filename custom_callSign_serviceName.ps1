@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20210111.1-alpha
+# Version: 20210228.1-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -114,7 +114,9 @@ function Customize-Configuration {
 	$epg123_cfg = Get-Content -path $EPG_Data_Dir'\'$CFG_File -Raw
 	$epg123_mxf = Get-Content -path $EPG_Data_Dir'\output\'$MXF_File -Raw
 
-	"Channel`tName`tSign`tSta ID`tLineup`tSrv ID"
+	"Display`tStation`tCustom`tCustom`tStation`tLineup`tService"
+	"Channel`tSign`tName`tSign`tID`tID`tID"
+	"-------`t-------`t-------`t-------`t-------`t-------`t-------"
 	foreach ($ch in $vPSObject) {
 
 		$ChNumber = $ch.GuideNumber.Split('.')
@@ -138,6 +140,10 @@ function Customize-Configuration {
 			$cCS = ( $epg123_cfg -match "<StationID CallSign=`".*?`".*?(?<Existing_customCallSign> customCallSign=`".*?`").*?>$RegexEscaped_station_id</StationID>" )
 			$Existing_customCallSign = $matches['Existing_customCallSign'];				$RegexEscaped_Existing_customCallSign = [Regex]::Escape($Existing_customCallSign)
 
+			# Get station call sign string
+			$sCS = ( $epg123_cfg -match "<StationID CallSign=`"(?<Existing_stationCallSign>.*?)`".*?>$RegexEscaped_station_id</StationID>" )
+			$Existing_stationCallSign = $matches['Existing_stationCallSign'];				$RegexEscaped_Existing_stationCallSign = [Regex]::Escape($Existing_stationCallSign)
+
 			if ($Custom_Service_Name_flag) { $customServiceName = " customServiceName=`"$ChName`"" } else { $ChName = '' }
 			if ($Custom_CallSign_flag) { $customCallSign = " customCallSign=`"$ChCallSign`"" } else { $ChCallSign = '' }
 
@@ -151,7 +157,7 @@ function Customize-Configuration {
 				"<StationID CallSign=`"(.*?)`"(.*?)$RegexEscaped_Existing_customCallSign(.*?)>$RegexEscaped_station_id</StationID>", `
 				"<StationID CallSign=`"`$1`"`$2$customCallSign`$3>$station_id</StationID>"
 
-			$ChNumber[0]+'.'+$ChNumber[1]+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$station_id+"`t"+$lineup_id+"`t"+$service_id
+			$ChNumber[0]+'.'+$ChNumber[1]+"`t"+$Existing_stationCallSign+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$station_id+"`t"+$lineup_id+"`t"+$service_id
 		}
 	}
 
@@ -276,6 +282,7 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 			Write-Host $_
 		}
 	}
+
 	if ($Verbose) {
 		''	# Blank line
 	}
@@ -359,6 +366,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20210228.1-alpha
+# Include station call sign in display output.
 
 # Version: 20210111.1-alpha
 # Accommodate the "matchName" field in "epg123.mxf"
