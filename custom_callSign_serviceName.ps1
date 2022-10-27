@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20210228.1-alpha
+# Version: 20210719.1-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -62,7 +62,7 @@ function Get-Channels_Guide_Name_Data {
 
 	if ($Retrieve_Data_From_Device) {
 		$webclient = new-object System.Net.WebClient
-		$lineup_json_url = 'http://'+$Device_IP_Address+'/lineup.json?show='+$Show
+		$lineup_json_url = 'http://'+$Device_IP_Address+'/lineup.json?show='+$Show+'&tuning'
 		if ($Device_Channel_Detection_Scan -eq 'web') {
 			Invoke-Device_Channel_Detection_Scan_Web
 		} elseif ($Device_Channel_Detection_Scan -eq 'client') {
@@ -114,11 +114,13 @@ function Customize-Configuration {
 	$epg123_cfg = Get-Content -path $EPG_Data_Dir'\'$CFG_File -Raw
 	$epg123_mxf = Get-Content -path $EPG_Data_Dir'\output\'$MXF_File -Raw
 
-	"Display`tStation`tCustom`tCustom`tStation`tLineup`tService"
-	"Channel`tSign`tName`tSign`tID`tID`tID"
-	"-------`t-------`t-------`t-------`t-------`t-------`t-------"
+	"B-Cast`tDisplay`tStation`tCustom`tCustom`tStation`tLineup`tService"
+	"Channel`tChannel`tSign`tName`tSign`tID`tID`tID"
+	"-------`t-------`t-------`t-------`t-------`t-------`t-------`t-------"
+
 	foreach ($ch in $vPSObject) {
 
+		$PhyChNumber = $ch.ChannelNumber
 		$ChNumber = $ch.GuideNumber.Split('.')
 		$ChName = $ch.GuideName
 		$ChCallSign = $ch.GuideName
@@ -157,7 +159,8 @@ function Customize-Configuration {
 				"<StationID CallSign=`"(.*?)`"(.*?)$RegexEscaped_Existing_customCallSign(.*?)>$RegexEscaped_station_id</StationID>", `
 				"<StationID CallSign=`"`$1`"`$2$customCallSign`$3>$station_id</StationID>"
 
-			$ChNumber[0]+'.'+$ChNumber[1]+"`t"+$Existing_stationCallSign+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$station_id+"`t"+$lineup_id+"`t"+$service_id
+			# Display Channel Info
+			$PhyChNumber+"`t"+$ChNumber[0]+'.'+$ChNumber[1]+"`t"+$Existing_stationCallSign+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$station_id+"`t"+$lineup_id+"`t"+$service_id
 		}
 	}
 
@@ -203,14 +206,69 @@ function Invoke-Device_Channel_Detection_Scan_Web {
 		}
 	} While ( $scan_status.ScanInProgress -eq 1)
 
-	$json = $webclient.DownloadString($lineup_json_url)
+#	$json = $webclient.DownloadString($lineup_json_url)
 
+	$Channel_Frequency_Map = @{
+		 '57000000' =  '2'
+		 '63000000' =  '3'
+		 '69000000' =  '4'
+		 '79000000' =  '5'
+		 '85000000' =  '6'
+		'177000000' =  '7'
+		'183000000' =  '8'
+		'189000000' =  '9'
+		'195000000' = '10'
+		'201000000' = '11'
+		'207000000' = '12'
+		'213000000' = '13'
+		'473000000' = '14'
 		'479000000' = '15'
+		'485000000' = '16'
+		'491000000' = '17'
+		'497000000' = '18'
+		'503000000' = '19'
+		'509000000' = '20'
+		'515000000' = '21'
+		'521000000' = '22'
+		'527000000' = '23'
+		'533000000' = '24'
+		'539000000' = '25'
+		'545000000' = '26'
+		'551000000' = '27'
+		'557000000' = '28'
+		'563000000' = '29'
+		'569000000' = '30'
+		'575000000' = '31'
+		'581000000' = '32'
+		'587000000' = '33'
+		'593000000' = '34'
+		'599000000' = '35'
+		'605000000' = '36'
+	}
+
+	foreach ($ch in ($webclient.DownloadString($lineup_json_url) | ConvertFrom-Json)) {
+		$key = $ch.Frequency.ToString()
+		$channel_number = $Channel_Frequency_Map[$key]
+		$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$ch.GuideNumber+'","GuideName":"'+$ch.GuideName+'"},'
+		$found++
+	}
+
 	# Final status
-	$found = ($json | ConvertFrom-Json).length; $progress = 100
+#	$found = ('['+$json.TrimEnd(',')+']' | ConvertFrom-Json).length
+	$progress = 100
 	$status = ' Found '+$found+' programs ('+$progress+'%)       '
 	Write-Host "`r"$status
 	''	# Blank line
+
+	if ($json) {
+		$json = $json.TrimEnd(',')
+		$json = '['+$json+']'		# As array
+
+		# Sort by ascending GuideNumber
+		$array = $json | ConvertFrom-Json
+		$array_sorted = $array | Sort-Object { [Version]$_.GuideNumber }
+		$json = $array_sorted | ConvertTo-Json -Compress
+	}
 
 	$Script:json = $json; $Script:Device_Address = $Device_IP_Address
 }
@@ -258,15 +316,6 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 
 	& "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID 'scan' "/tuner$tuner" | ForEach-Object -Process { $found = 0; $progress = 0 } {
 
-		$matched = $_ -match "PROGRAM *[0-9]*: *(?<GuideNumber>[0-9]{1,2}\.[0-9]*) *(?<GuideName>.*)"
-		if ($matched) {
-			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(control\)(.*)", "`$1`$2"
-			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(encrypted\)(.*)", "`$1`$2"
-			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(no data\)(.*)", "`$1`$2"
-			$json += '{"GuideNumber":"'+$matches['GuideNumber']+'","GuideName":"'+$matches['GuideName']+'"},'
-			$found++
-		}
-
 		$matched = $_ -match "SCANNING: .*? \(${channel_map}:(?<channel_number>[0-9]*)\).*"
 		if ($matched) {
 			$channel_number = $matches['channel_number']
@@ -276,6 +325,15 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 			if (!$Verbose) {
 				Write-Host "`r"$status -NoNewLine
 			}
+		}
+
+		$matched = $_ -match "PROGRAM *[0-9]*: *(?<GuideNumber>[0-9]{1,2}\.[0-9]*) *(?<GuideName>.*)"
+		if ($matched) {
+			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(control\)(.*)", "`$1`$2"
+			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(encrypted\)(.*)", "`$1`$2"
+			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(no data\)(.*)", "`$1`$2"
+			$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$matches['GuideNumber']+'","GuideName":"'+$matches['GuideName']+'"},'
+			$found++
 		}
 
 		if ($Verbose) {
@@ -366,6 +424,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20210719.1-alpha
+# Include broadcast channel in display output and JSON.
 
 # Version: 20210228.1-alpha
 # Include station call sign in display output.
