@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20220922.2-alpha
+# Version: 20220922.3-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -355,6 +355,9 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 		}
 	}
 
+	# Clear the tuner channel
+	& "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address 'set' "/tuner$tuner/channel" "none"
+
 	if ($Verbose) {
 		''	# Blank line
 	}
@@ -438,6 +441,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20220922.3-alpha
+# Clear the tuner channel after scan.
 
 # Version: 20220922.2-alpha
 # Use optional CustomGuideName field in JSON.
