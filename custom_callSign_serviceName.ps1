@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20210719.1-alpha
+# Version: 20220922.1-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -292,11 +292,18 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 		}
 	}
 
+	# Use the device IP Address to avoid LAN broadcast
+	if ($Device_IP_Address) {
+		$Utility_Device_Address = $Device_IP_Address
+	} else {
+		$Utility_Device_Address = $Device_ID
+	}
+
 	Get-Device_Information 'client'
 
 	# Find/Select available tuner
 	for ($tuner = 0; $tuner -le 64; $tuner++) {		# Loop depth failsafe (64)
-		$tuner_lockkey = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID get /tuner$tuner/lockkey
+		$tuner_lockkey = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address get /tuner$tuner/lockkey
 		if ($tuner_lockkey -match "none" -Or $tuner_lockkey -match "ERROR") {
 			break
 		}
@@ -308,13 +315,13 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 		pause; exit;
 	}
 
-	$channel_map = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID 'get' "/tuner$tuner/channelmap"
+	$channel_map = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address 'get' "/tuner$tuner/channelmap"
 
 	'Channel Detection: '
 	' Scanning device ('+$Device_ID+')... Tuner: '+$tuner+' '+$channel_map
 	''	# Blank line
 
-	& "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID 'scan' "/tuner$tuner" | ForEach-Object -Process { $found = 0; $progress = 0 } {
+	& "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address 'scan' "/tuner$tuner" | ForEach-Object -Process { $found = 0; $progress = 0 } {
 
 		$matched = $_ -match "SCANNING: .*? \(${channel_map}:(?<channel_number>[0-9]*)\).*"
 		if ($matched) {
@@ -378,8 +385,8 @@ function Get-Device_Information ($method){
 		'Device ID: '+$Device.DeviceID
 		'Device IP Address: '+$Device_IP_Address
 	} elseif ($method -eq 'client') {
-		$ModelNumber = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID get /sys/hwmodel
-		$FirmwareVersion = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Device_ID get /sys/version
+		$ModelNumber = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address get /sys/hwmodel
+		$FirmwareVersion = & "$HDHR_Prog_Dir\$HDHR_Client_Utility" $Utility_Device_Address get /sys/version
 
 		''	# Blank line
 		'Model: '+$ModelNumber
@@ -424,6 +431,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20220922.1-alpha
+# Use IP address for Utility_Device_Address (to avoid LAN broadcast when using device ID).
 
 # Version: 20210719.1-alpha
 # Include broadcast channel in display output and JSON.
