@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20220922.1-alpha
+# Version: 20220922.2-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -124,6 +124,11 @@ function Customize-Configuration {
 		$ChNumber = $ch.GuideNumber.Split('.')
 		$ChName = $ch.GuideName
 		$ChCallSign = $ch.GuideName
+
+		if ($ch.CustomGuideName) {
+			$ChName = $ch.CustomGuideName
+			$ChCallSign = $ch.CustomGuideName
+		}
 
 		# Get EPG channel lineup station ID, and perform Set/Remove/Replace
 		if ( $epg123_mxf -match `
@@ -250,6 +255,7 @@ function Invoke-Device_Channel_Detection_Scan_Web {
 		$key = $ch.Frequency.ToString()
 		$channel_number = $Channel_Frequency_Map[$key]
 		$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$ch.GuideNumber+'","GuideName":"'+$ch.GuideName+'"},'
+#		$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$ch.GuideNumber+'","GuideName":"'+$ch.GuideName+'","CustomGuideName":""},'
 		$found++
 	}
 
@@ -340,6 +346,7 @@ function Invoke-Device_Channel_Detection_Scan_Utility {
 			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(encrypted\)(.*)", "`$1`$2"
 			$matches['GuideName'] = $matches['GuideName'] -Replace "(.*?) \(no data\)(.*)", "`$1`$2"
 			$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$matches['GuideNumber']+'","GuideName":"'+$matches['GuideName']+'"},'
+#			$json += '{"ChannelNumber":"'+$channel_number+'","GuideNumber":"'+$matches['GuideNumber']+'","GuideName":"'+$matches['GuideName']+'","CustomGuideName":""},'
 			$found++
 		}
 
@@ -431,6 +438,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20220922.2-alpha
+# Use optional CustomGuideName field in JSON.
 
 # Version: 20220922.1-alpha
 # Use IP address for Utility_Device_Address (to avoid LAN broadcast when using device ID).
