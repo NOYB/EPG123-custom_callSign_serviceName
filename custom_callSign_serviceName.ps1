@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20220922.3-alpha
+# Version: 20230801.1-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -107,65 +107,64 @@ function Get-Channels_Guide_Name_Data {
 
 
 #
-# Set/Remove/Replace epg123.cfg customServiceName and customCallSign fields
+# Set/Remove/Replace epg123.cfg station attributes and sort (customCallSign and customServiceName)
 #
 function Customize-Configuration {
 
-	$epg123_cfg = Get-Content -path $EPG_Data_Dir'\'$CFG_File -Raw
-	$epg123_mxf = Get-Content -path $EPG_Data_Dir'\output\'$MXF_File -Raw
+	[xml]$epg123_cfg = Get-Content -Encoding UTF8 -path $EPG_Data_Dir'\'$CFG_File -Raw
+	[xml]$epg123_mxf = Get-Content -Encoding UTF8 -path $EPG_Data_Dir'\output\'$MXF_File -Raw
+
+	$StationNodes = $epg123_cfg.SelectNodes('//StationID')
+	$ChannelNodes = $epg123_mxf.SelectNodes('//Channel')
 
 	"B-Cast`tDisplay`tStation`tCustom`tCustom`tStation`tLineup`tService"
 	"Channel`tChannel`tSign`tName`tSign`tID`tID`tID"
 	"-------`t-------`t-------`t-------`t-------`t-------`t-------`t-------"
 
-	foreach ($ch in $vPSObject) {
+	# Set/Remove/Replace additional station attributes (Guide Ch Number, Physical Ch Number, Custom Call Sign, Custom Service Name)
+	foreach($StationNode in $StationNodes) {
 
-		$PhyChNumber = $ch.ChannelNumber
-		$ChNumber = $ch.GuideNumber.Split('.')
-		$ChName = $ch.GuideName
-		$ChCallSign = $ch.GuideName
+		if ([int]$StationNode.'#text' -gt 0) {
+			$CallSign = $StationNode.CallSign
+			$Station_ID = $StationNode.'#text'
 
-		if ($ch.CustomGuideName) {
-			$ChName = $ch.CustomGuideName
-			$ChCallSign = $ch.CustomGuideName
-		}
+			$epgChNumber = $null
+			# Get matching channel info from MXF (Lineup ID, Service ID, EPG Channel Number)
+			foreach ($ChannelNode in $ChannelNodes) {
+				if ($ChannelNode.uid -match '!Channel!'+$ChLineUp+'!'+$Station_ID+'_[0-9]+_[0-9]+') {
+					$Lineup_ID = $ChannelNode.lineup
+					$Service_ID = $ChannelNode.service
+					$epgChNumber = $ChannelNode.number+'.'+$ChannelNode.subNumber
+					break
+				}
+			}
 
-		# Get EPG channel lineup station ID, and perform Set/Remove/Replace
-		if ( $epg123_mxf -match `
-			"<Channel uid=`"!Channel!$ChLineUp!(?<station_id>[0-9]*)_"+$ChNumber[0]+"_"+$ChNumber[1]+"`" lineup=`"(?<lineup_id>l[0-9]*)`" " + `
-			"service=`"(?<service_id>.*?)`" matchName=`"(?<matchName>.*?)`" number=`""+$ChNumber[0]+"`" subNumber=`""+$ChNumber[1]+"`" />" ) {
+			# Remove existing additional attributes
+			$StationNode.RemoveAttribute("customCallSign")
+			$StationNode.RemoveAttribute("customServiceName")
 
-			$station_id = $matches['station_id'];	$RegexEscaped_station_id = [Regex]::Escape($station_id)
-			$lineup_id = $matches['lineup_id'];		$RegexEscaped_lineup_id = [Regex]::Escape($lineup_id)
-			$service_id = $matches['service_id'];	$RegexEscaped_service_id = [Regex]::Escape($service_id)
+			# Set/Replace additional attributes
+			foreach ($ch in $vPSObject) {
+				if ($ch.GuideNumber -eq $epgChNumber) {
+					$PhyChNumber = $ch.ChannelNumber
+					$ChNumber = $ch.GuideNumber
+					$ChName = $ch.GuideName
+					$ChCallSign = $ch.GuideName
 
-			# Get existing custom service name string
-			$cSN = ( $epg123_cfg -match "<StationID CallSign=`".*?`".*?(?<Existing_customServiceName> customServiceName=`".*?`").*?>$RegexEscaped_station_id</StationID>" )
-			$Existing_customServiceName = $matches['Existing_customServiceName'];		$RegexEscaped_Existing_customServiceName = [Regex]::Escape($Existing_customServiceName)
+					if ($ch.CustomGuideName) {
+						$ChName = $ch.CustomGuideName
+						$ChCallSign = $ch.CustomGuideName
+					}
 
-			# Get existing custom call sign string
-			$cCS = ( $epg123_cfg -match "<StationID CallSign=`".*?`".*?(?<Existing_customCallSign> customCallSign=`".*?`").*?>$RegexEscaped_station_id</StationID>" )
-			$Existing_customCallSign = $matches['Existing_customCallSign'];				$RegexEscaped_Existing_customCallSign = [Regex]::Escape($Existing_customCallSign)
+					if ($Custom_CallSign_flag) { $StationNode.SetAttribute("customCallSign", $ChCallSign) }
+					if ($Custom_Service_Name_flag) { $StationNode.SetAttribute("customServiceName", $ChName) }
 
-			# Get station call sign string
-			$sCS = ( $epg123_cfg -match "<StationID CallSign=`"(?<Existing_stationCallSign>.*?)`".*?>$RegexEscaped_station_id</StationID>" )
-			$Existing_stationCallSign = $matches['Existing_stationCallSign'];				$RegexEscaped_Existing_stationCallSign = [Regex]::Escape($Existing_stationCallSign)
+					# Display channel info
+					$PhyChNumber+"`t"+$ChNumber+"`t"+$CallSign+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$Station_ID+"`t"+$Lineup_ID+"`t"+$Service_ID
 
-			if ($Custom_Service_Name_flag) { $customServiceName = " customServiceName=`"$ChName`"" } else { $ChName = '' }
-			if ($Custom_CallSign_flag) { $customCallSign = " customCallSign=`"$ChCallSign`"" } else { $ChCallSign = '' }
-
-			# Set/Remove/Replace custom service name
-			$epg123_cfg = $epg123_cfg -replace `
-				"<StationID CallSign=`"(.*?)`"(.*?)$RegexEscaped_Existing_customServiceName(.*?)>$RegexEscaped_station_id</StationID>", `
-				"<StationID CallSign=`"`$1`"`$2$customServiceName`$3>$station_id</StationID>"
-
-			# Set/Remove/Replace custom call sign
-			$epg123_cfg = $epg123_cfg -replace `
-				"<StationID CallSign=`"(.*?)`"(.*?)$RegexEscaped_Existing_customCallSign(.*?)>$RegexEscaped_station_id</StationID>", `
-				"<StationID CallSign=`"`$1`"`$2$customCallSign`$3>$station_id</StationID>"
-
-			# Display Channel Info
-			$PhyChNumber+"`t"+$ChNumber[0]+'.'+$ChNumber[1]+"`t"+$Existing_stationCallSign+"`t"+$ChName+"`t"+$ChCallSign+"`t"+$station_id+"`t"+$lineup_id+"`t"+$service_id
+					break
+				}
+			}
 		}
 	}
 
@@ -173,10 +172,10 @@ function Customize-Configuration {
 	'Customized epg123.cfg saved to: '
 	if ($Dry_Run) {
 		$EPG_Data_Dir+'\custom_callSign_serviceName.Dry_Run.cfg'
-		$epg123_cfg.TrimEnd() | Set-Content -Encoding UTF8 -Path $EPG_Data_Dir'\custom_callSign_serviceName.Dry_Run.cfg'
+		$epg123_cfg.save($EPG_Data_Dir+'\custom_callSign_serviceName.Dry_Run.cfg')
 	} else {
 		$EPG_Data_Dir+'\'+$CFG_File
-		$epg123_cfg.TrimEnd() | Set-Content -Encoding UTF8 -Path $EPG_Data_Dir'\'$CFG_File
+		$epg123_cfg.save($EPG_Data_Dir+'\'+$CFG_File)
 	}
 }
 
@@ -441,6 +440,9 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20230801.1-alpha
+# Use XML to customize configuration rather than RegEx.
 
 # Version: 20220922.3-alpha
 # Clear the tuner channel after scan.
