@@ -1,6 +1,6 @@
 # Before using see observed issues, change log and development environment information at bottom.
 
-# Version: 20230801.1-alpha
+# Version: 20230801.2-alpha
 # Status: alpha
 
 # Typical file system locations
@@ -20,8 +20,12 @@ $EPG_Data_Dir = 'C:\ProgramData\GaRyan2\epg123', `	# Fully qualified EPG data di
 $CFG_File = 'epg123.cfg', `							# EPG config file
 $MXF_File = 'epg123.mxf', `							# EPG MXF file
 
+$Physical_Channel_Number_flag = $true, `			# Set/Replace (true), Remove (false) physical channel number
+$Guide_Channel_Number_flag = $true, `				# Set/Replace (true), Remove (false) guide channel number
 $Custom_Service_Name_flag = $true, `				# Set/Replace (true), Remove (false) custom channel service name
 $Custom_CallSign_flag = $true, `					# Set/Replace (true), Remove (false) custom channel call sign
+
+$Sort_By_Station_Attribute = 'GuideChNumber', `		# Sort by station attribute
 
 # Can be used standalone with guide name and number JSON data: ex: [{"GuideNumber":"10.4","GuideName":"OPBKids"}]
 $Retrieve_Data_From_Device = $true, `				# Retrieve channels & names from HDHomeRun device
@@ -107,7 +111,7 @@ function Get-Channels_Guide_Name_Data {
 
 
 #
-# Set/Remove/Replace epg123.cfg station attributes and sort (customCallSign and customServiceName)
+# Set/Remove/Replace epg123.cfg station attributes and sort (GuideChNumber, PhyChNumber, customCallSign and customServiceName)
 #
 function Customize-Configuration {
 
@@ -140,6 +144,8 @@ function Customize-Configuration {
 			}
 
 			# Remove existing additional attributes
+			$StationNode.RemoveAttribute("PhyChNumber")
+			$StationNode.RemoveAttribute("GuideChNumber")
 			$StationNode.RemoveAttribute("customCallSign")
 			$StationNode.RemoveAttribute("customServiceName")
 
@@ -156,6 +162,8 @@ function Customize-Configuration {
 						$ChCallSign = $ch.CustomGuideName
 					}
 
+					if ($Physical_Channel_Number_flag) { $StationNode.SetAttribute("PhyChNumber", $PhyChNumber) }
+					if ($Guide_Channel_Number_flag) { $StationNode.SetAttribute("GuideChNumber", $ChNumber) }
 					if ($Custom_CallSign_flag) { $StationNode.SetAttribute("customCallSign", $ChCallSign) }
 					if ($Custom_Service_Name_flag) { $StationNode.SetAttribute("customServiceName", $ChName) }
 
@@ -167,6 +175,14 @@ function Customize-Configuration {
 			}
 		}
 	}
+
+	# Sort by station attribute (enabled channels first, followed by disabled channels)
+	$epg123_cfg.EPG123.StationID | sort {         $_.CallSign}                   | % { if ([int]$_.'#text' -gt 0 -And -Not $_.$Sort_By_Station_Attribute) { [void]$epg123_cfg.EPG123.AppendChild($_) } }
+	$epg123_cfg.EPG123.StationID | sort {[decimal]$_.$Sort_By_Station_Attribute} | % { if ([int]$_.'#text' -gt 0 -And      $_.$Sort_By_Station_Attribute) { [void]$epg123_cfg.EPG123.AppendChild($_) } }
+
+	$epg123_cfg.EPG123.StationID | sort {         $_.CallSign}                   | % { if ([int]$_.'#text' -lt 0 -And -Not $_.$Sort_By_Station_Attribute) { [void]$epg123_cfg.EPG123.AppendChild($_) } }
+	$epg123_cfg.EPG123.StationID | sort {[decimal]$_.$Sort_By_Station_Attribute} | % { if ([int]$_.'#text' -lt 0 -And      $_.$Sort_By_Station_Attribute) { [void]$epg123_cfg.EPG123.AppendChild($_) } }
+
 
 	''	# Blank line
 	'Customized epg123.cfg saved to: '
@@ -440,6 +456,10 @@ pause; exit;	# Wait for user to exit/close PS window
 
 
 # Change Log
+
+# Version: 20230801.2-alpha
+# Add guide and physical channel numbers to configuration.
+# Sort Stations by Guide Channel Number (enabled channels first, followed by disabled channels)
 
 # Version: 20230801.1-alpha
 # Use XML to customize configuration rather than RegEx.
